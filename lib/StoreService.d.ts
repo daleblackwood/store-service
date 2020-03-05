@@ -23,7 +23,6 @@ interface IStore<TState = any> {
  * state management that is react-like
  */
 export declare class StoreService<STATE extends Record<string, any>> {
-    path: string;
     /**
      * Create a static, global StoreService singleton
      * @param serviceClassDefinition The class definition for the service.
@@ -38,6 +37,9 @@ export declare class StoreService<STATE extends Record<string, any>> {
     static getReducers(): Record<string, StoreReducer<any, any>>;
     static getMiddlewares(): StoreReducer[];
     static getServices(): StoreService<any>[];
+    static getStoreReducer(reducer: StoreReducer): StoreReducer;
+    static staticStore: IStore;
+    static getMiddleware(): StoreMiddleware;
     /** The name of the action  */
     get STATE_KEY(): string;
     /** Returns a copy of the state, based on last known and changes */
@@ -54,6 +56,7 @@ export declare class StoreService<STATE extends Record<string, any>> {
     private storeStateInternal;
     get storeState(): any;
     private store;
+    path: string;
     private isAttachedInternal;
     get isAttached(): boolean;
     constructor(path: string, stateInit: STATE);
@@ -69,13 +72,13 @@ export declare class StoreService<STATE extends Record<string, any>> {
      * Update the state, similar to a React component
      * @param stateChanges The properties to alter on the state
      */
-    setState(stateChanges: Partial<STATE>): void;
+    setState(stateChanges: Partial<STATE>): Promise<unknown>;
     onConnect(): void;
     addListener(onChange: () => void): () => void;
     /**
      * Updates the redux store at the end of the stack-frame
      */
-    protected dispatchScheduled(): void;
+    protected dispatchScheduled(): Promise<unknown>;
     /**
      * Updates the redux store now
      */

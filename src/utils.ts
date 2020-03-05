@@ -17,7 +17,7 @@ export function lookup<T = any>(obj: any, path: string): T|null {
       }
     }
   }
-  return result || null;
+  return typeof result !== "undefined" ? result : null;
 }
 
 /**
@@ -27,7 +27,7 @@ export function lookup<T = any>(obj: any, path: string): T|null {
  * @param value
  */
 export function set(obj: any, path: string, value: any) {
-  if (path.match(/\s/)) {
+  if (isDotPath(path) === false) {
     throw new Error("Invalid object path " + path);
   }
   const lastDotI = path.lastIndexOf(".");
@@ -71,7 +71,7 @@ export function isPascalCase(s: string) {
 }
 
 export function isDotPath(s: string) {
-  return !!s.match(/[^0-9A-Za-z\.]/);
+  return !s.match(/[^0-9A-Za-z\.]/);
 }
 
 

@@ -81,6 +81,28 @@ export class StoreService<STATE extends Record<string, any>> {
     return result;
   }
 
+  static getStoreReducer(reducer: StoreReducer): StoreReducer {
+    if (typeof reducer !== "function") {
+      throw new Error("reducer must be function");
+    }
+    return (state, action) => {
+      const services = this.getServices();
+      for (const service of services) {
+        state = service.reducer(state, action);
+      }
+      return reducer(state, action);
+    };
+  }
+
+  static staticStore: IStore = null;
+
+  static getMiddleware(): StoreMiddleware {
+    return store => {
+      this.staticStore = store;
+      return next => action => next(action);
+    };
+  }
+
   /** The name of the action  */
   public get STATE_KEY(): string {
     return pascalCase("Service" + this.constructor.name.toLowerCase());
@@ -104,14 +126,16 @@ export class StoreService<STATE extends Record<string, any>> {
   public get storeState(): any { return this.storeStateInternal; }
 
   private store: IStore;
+  public path: string;
 
   private isAttachedInternal: boolean;
   public get isAttached(): boolean { return this.isAttachedInternal; }
 
-  constructor(public path: string, stateInit: STATE) {
+  constructor(path: string, stateInit: STATE) {
     if (isDotPath(path) === false) {
-      throw new Error("Service slice name must be dot path");
+      throw new Error("Service slice name must be dot path - got " + path);
     }
+    this.path = path;
     this.stateInit = Object.freeze(stateInit);
     this.stateLast = { ...stateInit };
     this.stateChanges = {};
@@ -149,7 +173,7 @@ export class StoreService<STATE extends Record<string, any>> {
         this.stateLast[key] = stateChanges[key];
       }
     }
-    this.dispatchScheduled();
+    return this.dispatchScheduled();
   }
 
   public onConnect() {
@@ -169,7 +193,10 @@ export class StoreService<STATE extends Record<string, any>> {
    */
   protected dispatchScheduled() {
     clearTimeout(this.dispatchTimer);
-    this.dispatchTimer = setTimeout(() => this.dispatchImmediate(), 0);
+    return new Promise(r => setTimeout(() => {
+      this.dispatchImmediate();
+      r();
+    }, 0));
   }
 
   /**
@@ -177,8 +204,9 @@ export class StoreService<STATE extends Record<string, any>> {
    */
   protected dispatchImmediate() {
     clearTimeout(this.dispatchTimer);
-    if (this.store) {
-      this.store.dispatch({
+    const store = this.store || StoreService.staticStore;
+    if (store) {
+      store.dispatch({
         type: this.STATE_KEY,
         payload: this.stateChanges
       });
