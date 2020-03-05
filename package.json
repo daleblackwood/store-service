@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "node test",
-    "start": "node index"
+    "start": "node index",
+    "build": "tsc -b",
+    "build-test": "tsc -b && node test"
   },
   "author": "Dale Blackwood",
   "license": "MIT",

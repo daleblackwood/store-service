@@ -1,12 +1,13 @@
 {
 	"compilerOptions": {
     "target": "es6",
-    "module": "es6",
+    "module": "CommonJS",
 		"noImplicitAny": true,
 		"preserveConstEnums": true,
     "sourceMap": false,
-    "baseUrl": "./",
-    "outDir": "./lib",
+    "outDir": "lib",
     "declaration": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules/**/*"]
 }

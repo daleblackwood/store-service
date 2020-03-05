@@ -19,12 +19,14 @@ export type ServiceConnector<
   STATE_TYPE = any
 > = <PROPS_TYPE>(comp: FunctionComponent<PROPS_TYPE>) => ConnectedComponent<PROPS_TYPE, SERVICE_TYPE, STATE_TYPE>;
 
-export function connectToService<
+export function serviceConnector<
   SERVICE_TYPE extends StoreService<STATE_TYPE>,
   STATE_TYPE = any
 >(service: SERVICE_TYPE): ServiceConnector<SERVICE_TYPE, STATE_TYPE> {
-  return <PROPS_TYPE>(comp: FunctionComponent<PROPS_TYPE>) => (
-    (props: PROPS_TYPE) => {
+  return <PROPS_TYPE>(comp: FunctionComponent<PROPS_TYPE>) => {
+    return (props: PROPS_TYPE) => {
+      service.onConnect();
+      console.log("serviceConnector onConnect", comp, props);
       const renderComp = typeof comp === "function" ? comp : (comp as any).WrappedComponent;
       if (!renderComp) {
         return;
@@ -36,5 +38,5 @@ export function connectToService<
       };
       return renderComp(connectedProps) as ConnectedComponent<PROPS_TYPE, SERVICE_TYPE>;
     }
-  );
+  };
 }
