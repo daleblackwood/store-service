@@ -2,7 +2,7 @@
   "name": "store-service",
   "version": "1.0.0",
   "description": "A service-based Redux slice augmentation and alternative to redux-toolkit",
-  "main": "index.js",
+  "main": "lib/index.js",
   "scripts": {
     "test": "node test",
     "start": "node index",
