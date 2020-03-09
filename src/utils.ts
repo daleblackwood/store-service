@@ -70,18 +70,27 @@ export function isPascalCase(s: string) {
   return s === pascalCase(s);
 }
 
+/**
+ * @returns true if string `is.a.dot.path`
+ */
 export function isDotPath(s: string) {
   return !s.match(/[^0-9A-Za-z\.]/);
 }
 
-
+/**
+ * checks to see if objects are equivalent up to a certain depth
+ * uses strict equality under the specified depth
+ * @param a the first of the two objects to compare
+ * @param b the second of the two objects to compare 
+ * @param depth the depth to compare
+ */
 export function objectsMatch(a: any, b: any, depth = 2) {
-  return valuesPresent(a, b, depth) && valuesPresent(b, a, depth);
+  return presentValuesMatch(a, b, depth) && presentValuesMatch(b, a, depth);
 }
 
-function valuesPresent(src: any, dest: any, depth = 2) {
+function presentValuesMatch(src: any, dest: any, depth = 2) {
   if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
-    return src == dest;
+    return src === dest;
   }
   if (src === "function" || src instanceof Date) {
     return String(src) == String(dest);
@@ -99,9 +108,16 @@ function valuesPresent(src: any, dest: any, depth = 2) {
           if (dest.hasOwnProperty(key) === false) {
             return false;
           }
-          if (valuesPresent(src[key], dest[key], depth - 1) === false) {
+          if (presentValuesMatch(src[key], dest[key], depth - 1) === false) {
             return false;
           }
+        }
+      }
+    } else {
+      for (const key in src) {
+        if (src.hasOwnProperty(key)) {
+          if (src[key] !== dest[key])
+            return false;
         }
       }
     }
@@ -115,7 +131,7 @@ function valuesPresent(src: any, dest: any, depth = 2) {
  * @param key a string for converting to words
  * @returns an array of words
  */
-function toWords(key: string) {
+export function toWords(key: string) {
   if (typeof key !== "string") {
     throw new Error("Invalid key string " + key);
   }

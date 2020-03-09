@@ -18,17 +18,53 @@ const ACTION = {
   INCREASE: "INCREASE",
   DECREASE: "DECREASE"
 };
-
-test("utils work as expected", () => {
+test("util: object pathing", () => {
   assert(utils.isDotPath("this.that.theother"));
   assert(utils.isDotPath("propOnItsOwn"));
 
   const testObject = { hello: { world: true } };
-  assert(utils.lookup(testObject, "hello.world") === true);
+  assert.equal(utils.lookup(testObject, "hello.world"), true);
 
   utils.set(testObject, "hello.world", false);
-  assert(utils.lookup(testObject, "hello.world") === false);
-  assert(testObject.hello.world === false);
+  assert.equal(utils.lookup(testObject, "hello.world"), false);
+  assert.equal(testObject.hello.world, false);
+});
+
+test("util: top level object diffing", () => {
+  const obj1 = {
+    a: 0,
+    b: 1
+  };
+  const obj2 = { ...obj1 };
+  const topLevelA = utils.objectsMatch(obj1, obj2);
+  assert(topLevelA, "cloned objects should be equal");
+
+  obj2.b = 2;
+  const topLevelB = utils.objectsMatch(obj1, obj2);
+  assert(topLevelB === false, "modified clone objects shouldn't be equal");
+});
+
+test("util: sub-object diffing", () => {
+  const obj1 = {
+    a: { 
+      b: {
+        c: 2
+      }
+    }
+  };
+  const obj2 = {
+    a: { 
+      b: {
+        c: 2
+      }
+    }
+  };
+  const topLevelA = utils.objectsMatch(obj1, obj2);
+  assert(topLevelA, "subobjects should be matching");
+
+  obj2.a.b.c = 3;
+  const topLevelB = utils.objectsMatch(obj1, obj2);
+  assert(topLevelB === false, "subobjects shouldn't be matching");
 });
 
 test("create an unattached store", () => {
@@ -46,9 +82,9 @@ test("create an unattached store", () => {
   for (let i=0; i<3; i++) {
     store.dispatch({ type: ACTION.INCREASE, payload: 1 });
   }
-  assert(store.getState().value === 3, "value is " + store.getState().value);
+  assert.equal(store.getState().value, 3);
   store.dispatch({ type: ACTION.DECREASE, payload: 2 });
-  assert(store.getState().value === 1, "value is " + store.getState().value);
+  assert.equal(store.getState().value, 1);
 });
 
 test("attach to the store", () => {
@@ -64,7 +100,7 @@ test("attach to the store", () => {
     }
   );
   store = createStore(
-    StoreService.getStoreReducer(
+    StoreService.wrapReducer(
       counterReducer
     ),
     applyMiddleware(
@@ -75,14 +111,28 @@ test("attach to the store", () => {
 
 test("the service can update itself", () => {
   service.increaseA();
-  assert(service.state.a === 2);
+  assert.equal(service.state.a, 2);
 });
 
 test("the service can update the store", async () => {
   await service.increaseA();
   const newA = store.getState().testData.a;
-  assert(newA === 3, "new a is " + newA);
+  assert.equal(newA, 3);
 });
+
+test("the service can introduce properties", async () => {
+  await service.setState({ hello: "world" })
+  const newValue = store.getState().testData.hello;
+  assert.equal(newValue, "world");
+});
+
+test("the service works with changes to object properties", async () => {
+  await service.setState({ object: { property: 1 } });
+  await service.setState({ object: { property: 2 } });
+  const newValue = store.getState().testData.object.property;
+  assert.equal(newValue, 2);
+});
+
 
 /*------------------/
      END TESTS

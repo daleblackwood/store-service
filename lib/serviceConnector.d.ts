@@ -7,4 +7,4 @@ export declare type ConnectedProps<PROPS_TYPE, SERVICE_TYPE extends StoreService
 export declare type ConnectedComponent<PROPS_TYPE, SERVICE_TYPE extends StoreService<STATE_TYPE>, STATE_TYPE = any> = FunctionComponent<ConnectedProps<PROPS_TYPE, SERVICE_TYPE, STATE_TYPE>>;
 export declare type ServiceConnector<SERVICE_TYPE extends StoreService<STATE_TYPE>, STATE_TYPE = any> = <PROPS_TYPE>(comp: FunctionComponent<PROPS_TYPE>) => ConnectedComponent<PROPS_TYPE, SERVICE_TYPE, STATE_TYPE>;
 export declare function serviceConnector<SERVICE_TYPE extends StoreService<STATE_TYPE>, STATE_TYPE = any>(service: SERVICE_TYPE): ServiceConnector<SERVICE_TYPE, STATE_TYPE>;
-export {};
+export default serviceConnector;

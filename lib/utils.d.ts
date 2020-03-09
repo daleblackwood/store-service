@@ -23,3 +23,11 @@ export declare function pascalCase(key: string): string;
 export declare function isPascalCase(s: string): boolean;
 export declare function isDotPath(s: string): boolean;
 export declare function objectsMatch(a: any, b: any, depth?: number): boolean;
+export declare function presentValuesMatch(src: any, dest: any, depth?: number): boolean;
+/**
+ * converts an arbitrary alpha-numeric string into an
+ * array of words
+ * @param key a string for converting to words
+ * @returns an array of words
+ */
+export declare function toWords(key: string): string[];
