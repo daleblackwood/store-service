@@ -56,19 +56,11 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return this.getServiceMap()[className] as T || null;
   }
 
-  static getServiceMap() {
-    const mapParent: any = typeof window !== "undefined" ? window : this;
-    if (!mapParent.services) {
-      mapParent.services = {};
-    }
-    return mapParent.services as ServiceMap;
-  }
-
   static getReducer(matchPaths?: string[]): StoreReducer {
     return (state: any, action: IStoreAction<any>) => {
       const services = this.getServices(matchPaths);
       for (const service of services) {
-        const reducer = service.reducer;
+        const reducer = service.slice;
         if (reducer) {
           state = reducer(state, action);
         }
@@ -82,7 +74,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
       state = storeReducer(state, action);
       const services = this.getServices(matchPaths);
       for (const service of services) {
-        const reducer = service.reducer;
+        const reducer = service.slice;
         if (reducer) {
           state = reducer(state, action);
         }
@@ -125,31 +117,27 @@ export class StoreService<STATE extends Record<string, any> = {}> {
 
   static staticStore: IStore = null;
 
+  static getServiceMap() {
+    const mapParent: any = typeof window !== "undefined" ? window : this;
+    if (!mapParent.services) {
+      mapParent.services = {};
+    }
+    return mapParent.services as ServiceMap;
+  }
+
   /** The name of the action  */
-  get STATE_KEY(): string {
+  public get actionType(): string {
     return pascalCase("Service" + this.constructor.name.toLowerCase());
   }
 
   /** Returns a copy of the state, based on last known and changes */
-  get state(): STATE {
-    return { ...this.stateLast, ...this.stateChanges };
-  }
+  public get state(): STATE { return this.slice.state; }
 
-  connections: Array<{ comp: any, sub?: any }> = [];
+  public get storeState(): any { return this.slice.storeState; }
 
-  protected readonly stateInitial: STATE;
-
-  private stateLast: STATE;
-  private stateChanges: Partial<STATE>;
-  private dispatchTimer: any;
-  private subscriptions: Array<(state: STATE) => void> = [];
-
-  private storeStateInternal: any;
-  get storeState(): any { return this.storeStateInternal; }
-
-  private store: IStore;
-  path: string;
-
+  protected readonly slice: StoreServiceSlice<STATE>;
+  protected readonly dispatcher: StoreServiceDispatcher<STATE>;
+  
   private isAttachedInternal: boolean;
   get isAttached(): boolean { return this.isAttachedInternal; }
 
@@ -159,10 +147,8 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     if (isDotPath(path) === false) {
       throw new Error("Service slice name must be dot path - got " + path);
     }
-    this.path = path;
-    this.stateInitial = Object.freeze(stateInitial);
-    this.stateLast = { ...stateInitial };
-    this.stateChanges = {};
+    this.slice = new StoreServiceSlice<STATE>(path, path, stateInitial);
+    this.dispatcher = new StoreServiceDispatcher<STATE>(this.actionType);
   }
 
   /**
@@ -172,7 +158,9 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    */
   get middleware(): StoreMiddleware {
     return store => {
-      this.store = store;
+      if (!this.dispatcher) {
+        this.dispatcher = new StoreServiceDispatcher<STATE>(store, this.actionType);
+      }
       return next => action => next(action);
     };
   }
@@ -265,7 +253,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     const store = this.store || StoreService.staticStore;
     if (store) {
       store.dispatch({
-        type: this.STATE_KEY,
+        type: this.actionType,
         payload: this.stateChanges
       });
     }
@@ -306,6 +294,157 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     if (this.hasInited === false) {
       this.hasInited = true;
       this.init();
+    }
+    return storeState;
+  }
+
+}
+
+class StoreServiceDispatcher<STATE> {
+
+  private static staticStores: IStore[] = [];
+  private dispatchTimer: any;
+  public store: IStore = null;
+
+  constructor(private type: string) {}
+
+  public attach(store: IStore) {
+    this.store = store;
+    if (StoreServiceDispatcher.staticStores.indexOf(store) < 0) {
+      StoreServiceDispatcher.staticStores.push(store);
+    }
+  }
+
+  /** Updates the redux store at the end of the stack-frame */
+  protected dispatchScheduled(payload: STATE): Promise<void> {
+    clearTimeout(this.dispatchTimer);
+    return new Promise(r => setTimeout(() => {
+      this.dispatchImmediate(payload);
+      r();
+    }, 0));
+  }
+
+  /** Updates the redux store now */
+  protected dispatchImmediate(payload: STATE) {
+    clearTimeout(this.dispatchTimer);
+    const store = this.store || StoreServiceDispatcher.staticStores[0];
+    if (store) {
+      store.dispatch({ type: this.type, payload });
+    }
+  }
+}
+
+
+class StoreServiceSlice<STATE> {
+
+  public hasInited = false;
+
+  public stateLast: STATE;
+  public stateChanges: Partial<STATE> = {};
+
+  /** Returns a copy of the state, based on last known and changes */
+  get state(): STATE {
+    return { ...this.stateLast, ...this.stateChanges };
+  }
+
+  private subscriptions: Array<(state: STATE) => void> = [];
+
+  private storeStateInternal: any;
+  get storeState(): any { return this.storeStateInternal; }
+
+  constructor(
+    private readonly key: string, 
+    private readonly path: string, 
+    private readonly stateInitial: STATE
+  ) {
+    if (isDotPath(path) === false) {
+      throw new Error("Service slice name must be dot path - got " + path);
+    }
+    this.path = path;
+    this.stateInitial = Object.freeze(stateInitial);
+    this.stateLast = { ...stateInitial };
+    this.stateChanges = {};
+  }
+
+  public subscribe(callback: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(callback);
+    if (index >= 0) {
+      return;
+    }
+    this.subscriptions.push(callback);
+  }
+
+  public unsubscribe(callback: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(callback);
+    if (index < 0) {
+      return;
+    }
+    this.subscriptions.splice(index, 1);
+  }
+
+  public getSubscriptionIndex(callback: (state: STATE) => void) {
+    for (let i = this.subscriptions.length - 1; i >= 0; i--) {
+      if (this.subscriptions[i] === callback) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Update the state, similar to a React component
+   * @param stateChanges The properties to alter on the state
+   */
+  setState(stateChanges: Partial<STATE>): boolean {
+    this.stateChanges = this.stateChanges || {};
+    let hasChanged = false;
+    for (const key in stateChanges) {
+      if (typeof stateChanges[key] !== "undefined") {
+        if (this.stateChanges.hasOwnProperty(key)) {
+          delete this.stateChanges[key];
+        }
+        if (this.stateLast[key] === stateChanges[key]) {
+          continue;
+        }
+        this.stateChanges[key] = stateChanges[key];
+        hasChanged = true;
+      }
+    }
+    return hasChanged;
+  }
+
+  addListener(onChange: () => void) {
+    const index = this.subscriptions.length;
+    this.subscriptions.push(onChange);
+    return () => {
+      this.subscriptions.slice(index, 1);
+    };
+  }
+
+  /**
+   * The redux reducer / handler
+   * @param newState the full redux state
+   * @param action the acton updating
+   */
+  public reduce(storeState: any, action: IStoreAction) {
+    const sliceState = lookup(storeState, this.path);
+    let currentState = this.state;
+    const hasSliceChanged = objectsMatch(currentState, sliceState, 1) === false;
+    if (hasSliceChanged) {
+      this.storeStateInternal = storeState;
+      this.stateLast = sliceState || this.stateLast || this.stateInitial;
+      this.stateChanges = {};
+      this.stateLast = currentState;
+      this.stateChanges = {};
+      if (!storeState) {
+        storeState = {};
+      }
+      set(storeState, this.path, currentState);
+      setTimeout(() => {
+        for (const subcription of this.subscriptions) {
+          subcription(currentState);
+        }
+      }, 0);
     }
     return storeState;
   }

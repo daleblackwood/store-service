@@ -133,6 +133,15 @@ test("the service works with changes to object properties", async () => {
   assert.equal(newValue, 2);
 });
 
+const DummyComponent = comp = props => {
+  render() {
+    const rendered = [];
+    for (var key in props) {
+      rendered.push(key + "=" + JSON.stringify(props[key]));
+    }
+    return rendered;
+  }
+};
 
 /*------------------/
      END TESTS
