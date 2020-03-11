@@ -109,9 +109,10 @@ const TitleComponent = compose(
 ### Changes
 **1.0.1**
   - React-Redux-like connect method provided through HOCs
-  - Class/component ready for extension
+  - React/Preact abstractions
 
 ### Roadmap
 **1.1.0**
   - service state change diffing from global store into state slice
   - component state change diffing from HOC prior to render
+  - Class/component ready for extension
