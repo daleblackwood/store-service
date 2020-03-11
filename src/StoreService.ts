@@ -1,5 +1,15 @@
-import { serviceConnector, ServiceConnector } from "./serviceConnector";
-import { isDotPath, lookup, objectsMatch, pascalCase, set } from "./utils";
+import {
+  IReact,
+  serviceConnector,
+} from "./serviceConnector";
+
+import {
+  isDotPath,
+  lookup,
+  objectsMatch,
+  pascalCase,
+  set
+} from "./utils";
 
 /** Service state snapshot */
 export interface IServiceStateAction<T> {
@@ -167,26 +177,44 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     };
   }
 
-  get connector(): ServiceConnector<this, STATE> {
-    return serviceConnector(this);
-  }
-
   get reducer(): StoreReducer {
     return this.reduce.bind(this) as StoreReducer;
   }
 
-  connect(additionalProps?: Partial<STATE>) {
-    if (additionalProps) {
-      this.setState(additionalProps);
+  connect(React: IReact) {
+    return serviceConnector(React, this);
+  }
+
+  public subscribe(callback: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(callback);
+    if (index >= 0) {
+      return;
     }
-    return this.connector;
+    this.subscriptions.push(callback);
+  }
+
+  public unsubscribe(callback: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(callback);
+    if (index < 0) {
+      return;
+    }
+    this.subscriptions.splice(index, 1);
+  }
+
+  public getSubscriptionIndex(callback: (state: STATE) => void) {
+    for (let i = this.subscriptions.length - 1; i >= 0; i--) {
+      if (this.subscriptions[i] === callback) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /**
    * Update the state, similar to a React component
    * @param stateChanges The properties to alter on the state
    */
-  setState(stateChanges: Partial<STATE>) {
+  setState(stateChanges: Partial<STATE>): Promise<void> {
     this.stateChanges = this.stateChanges || {};
     let hasChanged = false;
     for (const key in stateChanges) {
@@ -206,7 +234,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     }
   }
 
-  public onInit() {}
+  public init() {}
 
   public onConnect(component?: any) {}
 
@@ -221,7 +249,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
   /**
    * Updates the redux store at the end of the stack-frame
    */
-  protected dispatchScheduled() {
+  protected dispatchScheduled(): Promise<void> {
     clearTimeout(this.dispatchTimer);
     return new Promise(r => setTimeout(() => {
       this.dispatchImmediate();
@@ -247,10 +275,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    * Can be overriden to react to incoming state changes
    * @param newState the full snapshot of changes properties
    */
-  protected onStateChange(newState: STATE) {
-    this.stateLast = newState;
-    this.stateChanges = {};
-  }
+  onState(newState: STATE) {}
 
   /**
    * The redux reducer / handler
@@ -259,24 +284,28 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    */
   private reduce(storeState: any, action: IStoreAction) {
     const sliceState = lookup(storeState, this.path);
-    const currentState = this.state;
+    let currentState = this.state;
     const hasSliceChanged = objectsMatch(currentState, sliceState, 1) === false;
     if (hasSliceChanged) {
       this.storeStateInternal = storeState;
       this.stateLast = sliceState || this.stateLast || this.stateInitial;
       this.stateChanges = {};
-      for (const sub of this.subscriptions) {
-        sub(currentState);
-      }
-      this.onStateChange(currentState);
+      this.stateLast = currentState;
+      this.stateChanges = {};
       if (!storeState) {
         storeState = {};
       }
       set(storeState, this.path, currentState);
+      this.onState(currentState);
+      setTimeout(() => {
+        for (const subcription of this.subscriptions) {
+          subcription(currentState);
+        }
+      }, 0);
     }
     if (this.hasInited === false) {
       this.hasInited = true;
-      this.onInit();
+      this.init();
     }
     return storeState;
   }

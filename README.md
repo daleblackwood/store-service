@@ -85,3 +85,12 @@ probably best to add StoreServices _after_ your existing store definitions.
     ])
   );
 ```
+
+### Changes
+**1.0.1**
+  - React-Redux-like connect method provided through HOCs
+
+### Roadmap
+**1.1.0**
+  - service state change diffing from global store into state slice
+  - component state change diffing from HOC prior to render

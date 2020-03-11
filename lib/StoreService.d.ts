@@ -1,4 +1,4 @@
-import { ServiceConnector } from "./serviceConnector";
+import { IReact } from "./serviceConnector";
 /** Service state snapshot */
 export interface IServiceStateAction<T> {
     type: string;
@@ -67,21 +67,23 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
      * @param customPath an optional path (default is pascal service name)
      */
     get middleware(): StoreMiddleware;
-    get connector(): ServiceConnector<this, STATE>;
     get reducer(): StoreReducer;
-    connect(additionalProps?: Partial<STATE>): ServiceConnector<this, STATE>;
+    connect(React: IReact): any;
+    subscribe(callback: (state: STATE) => void): void;
+    unsubscribe(callback: (state: STATE) => void): void;
+    getSubscriptionIndex(callback: (state: STATE) => void): number;
     /**
      * Update the state, similar to a React component
      * @param stateChanges The properties to alter on the state
      */
-    setState(stateChanges: Partial<STATE>): Promise<unknown>;
-    onInit(): void;
+    setState(stateChanges: Partial<STATE>): Promise<void>;
+    init(): void;
     onConnect(component?: any): void;
     addListener(onChange: () => void): () => void;
     /**
      * Updates the redux store at the end of the stack-frame
      */
-    protected dispatchScheduled(): Promise<unknown>;
+    protected dispatchScheduled(): Promise<void>;
     /**
      * Updates the redux store now
      */
@@ -90,7 +92,7 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
      * Can be overriden to react to incoming state changes
      * @param newState the full snapshot of changes properties
      */
-    protected onStateChange(newState: STATE): void;
+    onState(newState: STATE): void;
     /**
      * The redux reducer / handler
      * @param newState the full redux state

@@ -21,9 +21,18 @@ export declare function pascalCase(key: string): string;
  * @returns true if string is pascal case
  */
 export declare function isPascalCase(s: string): boolean;
+/**
+ * @returns true if string `is.a.dot.path`
+ */
 export declare function isDotPath(s: string): boolean;
+/**
+ * checks to see if objects are equivalent up to a certain depth
+ * uses strict equality under the specified depth
+ * @param a the first of the two objects to compare
+ * @param b the second of the two objects to compare
+ * @param depth the depth to compare
+ */
 export declare function objectsMatch(a: any, b: any, depth?: number): boolean;
-export declare function presentValuesMatch(src: any, dest: any, depth?: number): boolean;
 /**
  * converts an arbitrary alpha-numeric string into an
  * array of words
