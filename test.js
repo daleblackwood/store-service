@@ -37,14 +37,14 @@ test("util: object diffing", () => {
   };
   const obj2 = { ...obj1 };
 
-  const topLevelA = utils.sameValue(obj1, obj2);
+  const topLevelA = utils.valuesMatch(obj1, obj2);
   assert(topLevelA, "cloned objects should be equal");
 
   obj2.b = 2;
-  const topLevelB = utils.sameValue(obj1, obj2);
+  const topLevelB = utils.valuesMatch(obj1, obj2);
   assert(topLevelB === false, "modified clone objects shouldn't be equal");
 
-  const diffB = utils.diff(obj1, obj2);
+  const diffB = utils.valueDiff(obj1, obj2);
   assert(diffB.a === undefined, "a is no different");
   assert(diffB.b === 2, "diffB's new b value should be 2");
 });
@@ -53,15 +53,15 @@ test("util: sub-object diffing", () => {
   const obj1 = {  a: {  b: {  c: 2  }  } };
   const obj2 = {  a: {  b: {  c: 2  }  } };
 
-  const topLevelA = utils.sameValue(obj1, obj2);
+  const topLevelA = utils.valuesMatch(obj1, obj2);
   assert(topLevelA, "subobjects should be matching");
 
   obj2.a.b.c = 3;
-  const topLevelB = utils.sameValue(obj1, obj2);
+  const topLevelB = utils.valuesMatch(obj1, obj2);
   assert(topLevelB === false, "subobjects shouldn't be matching");
 
   obj2.a.b = "hello world";
-  const diffC = utils.diff(obj1, obj2);
+  const diffC = utils.valueDiff(obj1, obj2);
   assert(typeof diffC === "object", "diffC's should be an object");
   assert(typeof diffC.a.b === "string", "diffC's b value should be astring");
   assert(diffC.a.b === "hello world", "diffC's b.hello value should be 'world'");

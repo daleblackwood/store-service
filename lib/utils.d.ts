@@ -33,7 +33,7 @@ export declare function isDotPath(s: string): boolean;
  * @param depth the depth to compare
  * @returns true if the object structures match
  */
-export declare function sameValue(src: any, dest: any, depth?: number): boolean;
+export declare function valuesMatch(src: any, dest: any, depth?: number): boolean;
 /**
  * Calculates the difference between two object/value structures
  * @param src the first state of the object/value
@@ -41,7 +41,7 @@ export declare function sameValue(src: any, dest: any, depth?: number): boolean;
  * @param depth the depth to compare, performs reference match beyond depth
  * @returns the structured differences, new value or undefined if the same
  */
-export declare function diff(src: any, dest: any, depth?: number): any;
+export declare function valueDiff(src: any, dest: any, depth?: number): any;
 /**
  * converts an arbitrary alpha-numeric string into an
  * array of words

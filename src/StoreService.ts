@@ -6,7 +6,8 @@ import {
 import {
   isDotPath,
   lookup,
-  sameValue,
+  valuesMatch,
+  valueDiff,
   pascalCase,
   set
 } from "./utils";
@@ -259,7 +260,6 @@ class StoreServiceDispatcher<STATE> {
   }
 }
 
-
 class StoreServiceSlice<STATE> {
 
   public hasInited = false;
@@ -324,6 +324,7 @@ class StoreServiceSlice<STATE> {
    */
   setState(stateChanges: Partial<STATE>): boolean {
     this.stateChanges = this.stateChanges || {};
+
     let hasChanged = false;
     for (const key in stateChanges) {
       if (typeof stateChanges[key] !== "undefined") {
@@ -348,7 +349,7 @@ class StoreServiceSlice<STATE> {
   public reduce(storeState: any, action: IStoreAction) {
     const sliceState = lookup(storeState, this.path);
     let currentState = this.state;
-    const hasSliceChanged = sameValue(currentState, sliceState, 1) === false;
+    const hasSliceChanged = valuesMatch(currentState, sliceState, 1) === false;
     if (hasSliceChanged) {
       this.storeStateInternal = storeState;
       this.stateLast = sliceState || this.stateLast || this.stateInitial;

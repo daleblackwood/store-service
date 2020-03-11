@@ -29,10 +29,11 @@ Components (HOCs) to their children. It'd probably be easier just to avoid the
 whole thing and have a dedicated place for model and state management.
 
 ### An Alternative To...
-StoreService is as an alternative to redux-toolkit and react-redux. It isn't a
-drop-in replacement but will work nicely alongside those tools.
+StoreService is as an alternative to redux-toolkit and react-redux. It offers
+the convience of redux-toolkit and the functionality of react-redux while 
+providing for structured models.
 
-### How?
+### How To Use
 
 #### Declaring a StoreService
 Service declaration should be easy: extend the `StoreService` class and wrap it
@@ -111,8 +112,9 @@ const TitleComponent = compose(
   - React-Redux-like connect method provided through HOCs
   - React/Preact abstractions
 
-### Roadmap
 **1.1.0**
   - service state change diffing from global store into state slice
   - component state change diffing from HOC prior to render
+
+### Roadmap
   - Class/component ready for extension
