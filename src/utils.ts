@@ -83,46 +83,83 @@ export function isDotPath(s: string) {
  * @param a the first of the two objects to compare
  * @param b the second of the two objects to compare 
  * @param depth the depth to compare
+ * @returns true if the object structures match
  */
-export function objectsMatch(a: any, b: any, depth = 2) {
-  return presentValuesMatch(a, b, depth) && presentValuesMatch(b, a, depth);
+export function sameValue(src: any, dest: any, depth = 2) {
+  return diff(src, dest, depth) === undefined;
 }
 
-function presentValuesMatch(src: any, dest: any, depth = 2) {
-  if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
-    return src === dest;
+function consolodateKeys(...objs: Array<Record<string, any>>) {
+  const keys: any = {};
+  for (const obj of objs) {
+    if (!obj || typeof obj !== "object") {
+      throw new Error("Non-object value");
+    }
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        keys[key] = true;
+      }
+    }
   }
-  if (src === "function" || src instanceof Date) {
-    return String(src) == String(dest);
+  const result: string[] = [];
+  for (const key in keys) {
+    result.push(key);
+  }
+  return result;
+}
+
+/**
+ * Calculates the difference between two object/value structures
+ * @param src the first state of the object/value
+ * @param dest the second state of the object/value
+ * @param depth the depth to compare, performs reference match beyond depth
+ * @returns the structured differences, new value or undefined if the same
+ */
+export function diff(src: any, dest: any, depth = 2): any {
+  if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
+    return src === dest ? undefined : dest;
+  }
+  if (typeof src === "function" || src instanceof Date) {
+    return String(src) === String(dest) ? undefined : dest;
   }
   if ((src === null) !== (dest === null)) {
-    return false;
+    return dest;
   }
   if (typeof src === "object") {
     if (typeof dest !== "object") {
-      return false;
+      return dest;
     }
-    if (depth > 0) {
-      for (const key in src) {
-        if (src.hasOwnProperty(key)) {
-          if (dest.hasOwnProperty(key) === false) {
-            return false;
-          }
-          if (presentValuesMatch(src[key], dest[key], depth - 1) === false) {
-            return false;
-          }
+
+    const result: Record<string, any> = {};
+
+    const allKeys = consolodateKeys(src, dest);
+    for (const key of allKeys) {
+      if (src.hasOwnProperty(key) === false) {
+        result[key] = dest[key];
+        continue;
+      }
+      if (dest.hasOwnProperty(key) === false) {
+        result[key] = undefined;
+        continue;
+      }
+      if (depth > 0) {
+        const subdif = diff(src[key], dest[key], depth - 1);
+        if (subdif) {
+          result[key] = subdif;
+          continue;
+        }
+      } else {
+        if (src[key] !== dest[key]) {
+          result[key] = dest[key];
+          continue;
         }
       }
-    } else {
-      for (const key in src) {
-        if (src.hasOwnProperty(key)) {
-          if (src[key] !== dest[key])
-            return false;
-        }
-      }
+    }
+    if (consolodateKeys(result).length > 0) {
+      return result;
     }
   }
-  return true;
+  return undefined;
 }
 
 /**

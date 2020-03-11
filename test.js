@@ -36,12 +36,23 @@ test("util: top level object diffing", () => {
     b: 1
   };
   const obj2 = { ...obj1 };
-  const topLevelA = utils.objectsMatch(obj1, obj2);
+
+  const topLevelA = utils.sameValue(obj1, obj2);
   assert(topLevelA, "cloned objects should be equal");
 
   obj2.b = 2;
-  const topLevelB = utils.objectsMatch(obj1, obj2);
+  const topLevelB = utils.sameValue(obj1, obj2);
   assert(topLevelB === false, "modified clone objects shouldn't be equal");
+
+  const diffB = utils.diff(obj1, obj2);
+  assert(diffB.a === undefined, "a is no different");
+  assert(diffB.b === 2, "diffB's new b value should be 2");
+
+  obj2.b = { hello: "world" };
+  const diffC = utils.diff(obj1, obj2);
+  assert(typeof diffC === "object", "diffC's should be an object");
+  assert(typeof diffC.b === "object", "diffC's b value should be an object");
+  assert(diffC.b.hello === "world", "diffC's b.hello value should be 'world'");
 });
 
 test("util: sub-object diffing", () => {
@@ -59,11 +70,11 @@ test("util: sub-object diffing", () => {
       }
     }
   };
-  const topLevelA = utils.objectsMatch(obj1, obj2);
+  const topLevelA = utils.sameValue(obj1, obj2);
   assert(topLevelA, "subobjects should be matching");
 
   obj2.a.b.c = 3;
-  const topLevelB = utils.objectsMatch(obj1, obj2);
+  const topLevelB = utils.sameValue(obj1, obj2);
   assert(topLevelB === false, "subobjects shouldn't be matching");
 });
 
@@ -132,16 +143,6 @@ test("the service works with changes to object properties", async () => {
   const newValue = store.getState().testData.object.property;
   assert.equal(newValue, 2);
 });
-
-const DummyComponent = comp = props => {
-  render() {
-    const rendered = [];
-    for (var key in props) {
-      rendered.push(key + "=" + JSON.stringify(props[key]));
-    }
-    return rendered;
-  }
-};
 
 /*------------------/
      END TESTS

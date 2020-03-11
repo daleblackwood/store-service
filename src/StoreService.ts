@@ -6,7 +6,7 @@ import {
 import {
   isDotPath,
   lookup,
-  objectsMatch,
+  sameValue,
   pascalCase,
   set
 } from "./utils";
@@ -60,9 +60,9 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return (state: any, action: IStoreAction<any>) => {
       const services = this.getServices(matchPaths);
       for (const service of services) {
-        const reducer = service.slice;
-        if (reducer) {
-          state = reducer(state, action);
+        const slice = service.slice;
+        if (slice) {
+          state = slice.reduce(state, action);
         }
       }
       return state;
@@ -74,9 +74,9 @@ export class StoreService<STATE extends Record<string, any> = {}> {
       state = storeReducer(state, action);
       const services = this.getServices(matchPaths);
       for (const service of services) {
-        const reducer = service.slice;
-        if (reducer) {
-          state = reducer(state, action);
+        const slice = service.slice;
+        if (slice) {
+          state = slice.reduce(state, action);
         }
       }
       return state;
@@ -130,19 +130,23 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return pascalCase("Service" + this.constructor.name.toLowerCase());
   }
 
-  /** Returns a copy of the state, based on last known and changes */
+  /** a readonly copy of the state, based on last known and changes */
   public get state(): STATE { return this.slice.state; }
 
+  /** a readonly copy of the store state */
   public get storeState(): any { return this.slice.storeState; }
+
+  public get path(): string { return this.slice.path; }
 
   protected readonly slice: StoreServiceSlice<STATE>;
   protected readonly dispatcher: StoreServiceDispatcher<STATE>;
-  
-  private isAttachedInternal: boolean;
-  get isAttached(): boolean { return this.isAttachedInternal; }
 
   private hasInited = false;
 
+  /**
+   * @param path - the location to occupy on the main store
+   * @param stateInitial - the initial state of the service
+   */
   constructor(path: string, stateInitial: STATE) {
     if (isDotPath(path) === false) {
       throw new Error("Service slice name must be dot path - got " + path);
@@ -156,147 +160,68 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    * @param reducerObject the object containing the reducers
    * @param customPath an optional path (default is pascal service name)
    */
-  get middleware(): StoreMiddleware {
+  public get middleware(): StoreMiddleware {
     return store => {
-      if (!this.dispatcher) {
-        this.dispatcher = new StoreServiceDispatcher<STATE>(store, this.actionType);
-      }
+      this.dispatcher.attach(store);
       return next => action => next(action);
     };
   }
 
-  get reducer(): StoreReducer {
-    return this.reduce.bind(this) as StoreReducer;
+  /**
+   * receive a single reducer, for use in existing stores (not recommended)
+   * @param React - React/preact or similar framework reference
+   */
+  public get reducer(): StoreReducer {
+    return this.slice.reduce;
   }
 
-  connect(React: IReact) {
+  /**
+   * connect in a manner similar ro react-redux as a HOC
+   * @param React - React/preact or similar framework reference
+   */
+  public connect(React: IReact) {
     return serviceConnector(React, this);
-  }
-
-  public subscribe(callback: (state: STATE) => void) {
-    const index = this.getSubscriptionIndex(callback);
-    if (index >= 0) {
-      return;
-    }
-    this.subscriptions.push(callback);
-  }
-
-  public unsubscribe(callback: (state: STATE) => void) {
-    const index = this.getSubscriptionIndex(callback);
-    if (index < 0) {
-      return;
-    }
-    this.subscriptions.splice(index, 1);
-  }
-
-  public getSubscriptionIndex(callback: (state: STATE) => void) {
-    for (let i = this.subscriptions.length - 1; i >= 0; i--) {
-      if (this.subscriptions[i] === callback) {
-        return i;
-      }
-    }
-    return -1;
   }
 
   /**
    * Update the state, similar to a React component
    * @param stateChanges The properties to alter on the state
    */
-  setState(stateChanges: Partial<STATE>): Promise<void> {
-    this.stateChanges = this.stateChanges || {};
-    let hasChanged = false;
-    for (const key in stateChanges) {
-      if (typeof stateChanges[key] !== "undefined") {
-        if (this.stateChanges.hasOwnProperty(key)) {
-          delete this.stateChanges[key];
-        }
-        if (this.stateLast[key] === stateChanges[key]) {
-          continue;
-        }
-        this.stateChanges[key] = stateChanges[key];
-        hasChanged = true;
-      }
-    }
+  public setState(stateChanges: Partial<STATE>) {
+    const hasChanged = this.slice.setState(stateChanges);
     if (hasChanged) {
-      return this.dispatchScheduled();
-    }
-  }
-
-  public init() {}
-
-  public onConnect(component?: any) {}
-
-  addListener(onChange: () => void) {
-    const index = this.subscriptions.length;
-    this.subscriptions.push(onChange);
-    return () => {
-      this.subscriptions.slice(index, 1);
-    };
-  }
-
-  /**
-   * Updates the redux store at the end of the stack-frame
-   */
-  protected dispatchScheduled(): Promise<void> {
-    clearTimeout(this.dispatchTimer);
-    return new Promise(r => setTimeout(() => {
-      this.dispatchImmediate();
-      r();
-    }, 0));
-  }
-
-  /**
-   * Updates the redux store now
-   */
-  protected dispatchImmediate() {
-    clearTimeout(this.dispatchTimer);
-    const store = this.store || StoreService.staticStore;
-    if (store) {
-      store.dispatch({
-        type: this.actionType,
-        payload: this.stateChanges
-      });
+      this.dispatcher.dispatchImmediate(this.state);
     }
   }
 
   /**
-   * Can be overriden to react to incoming state changes
+   * Subscribe to the service to receive changes
+   * @param handler - a listening callback to subscribe
+   */
+  public subscribe(handler: () => void) {
+    return this.slice.subscribe(handler);
+  }
+
+  /**
+   * Subscribe to the service to receive changes
+   * @param handler - a listening callback to unsubscribe
+   */
+  public unsubscribe(handler: () => void) {
+    this.slice.unsubscribe(handler);
+  }
+
+  /**
+   * Lifecycle method: can be overriden to react to readyness or initialize the
+   * service
    * @param newState the full snapshot of changes properties
    */
-  onState(newState: STATE) {}
+  protected init() {}
 
   /**
-   * The redux reducer / handler
-   * @param newState the full redux state
-   * @param action the acton updating
+   * Lifecycle method: can be overriden to react to incoming state changes
+   * @param newState the full snapshot of changes properties
    */
-  private reduce(storeState: any, action: IStoreAction) {
-    const sliceState = lookup(storeState, this.path);
-    let currentState = this.state;
-    const hasSliceChanged = objectsMatch(currentState, sliceState, 1) === false;
-    if (hasSliceChanged) {
-      this.storeStateInternal = storeState;
-      this.stateLast = sliceState || this.stateLast || this.stateInitial;
-      this.stateChanges = {};
-      this.stateLast = currentState;
-      this.stateChanges = {};
-      if (!storeState) {
-        storeState = {};
-      }
-      set(storeState, this.path, currentState);
-      this.onState(currentState);
-      setTimeout(() => {
-        for (const subcription of this.subscriptions) {
-          subcription(currentState);
-        }
-      }, 0);
-    }
-    if (this.hasInited === false) {
-      this.hasInited = true;
-      this.init();
-    }
-    return storeState;
-  }
+  protected onState(newState: STATE) {}
 
 }
 
@@ -316,7 +241,7 @@ class StoreServiceDispatcher<STATE> {
   }
 
   /** Updates the redux store at the end of the stack-frame */
-  protected dispatchScheduled(payload: STATE): Promise<void> {
+  public dispatchScheduled(payload: STATE): Promise<void> {
     clearTimeout(this.dispatchTimer);
     return new Promise(r => setTimeout(() => {
       this.dispatchImmediate(payload);
@@ -325,7 +250,7 @@ class StoreServiceDispatcher<STATE> {
   }
 
   /** Updates the redux store now */
-  protected dispatchImmediate(payload: STATE) {
+  public dispatchImmediate(payload: STATE) {
     clearTimeout(this.dispatchTimer);
     const store = this.store || StoreServiceDispatcher.staticStores[0];
     if (store) {
@@ -353,9 +278,9 @@ class StoreServiceSlice<STATE> {
   get storeState(): any { return this.storeStateInternal; }
 
   constructor(
-    private readonly key: string, 
-    private readonly path: string, 
-    private readonly stateInitial: STATE
+    public readonly key: string, 
+    public readonly path: string, 
+    public readonly stateInitial: STATE
   ) {
     if (isDotPath(path) === false) {
       throw new Error("Service slice name must be dot path - got " + path);
@@ -364,6 +289,7 @@ class StoreServiceSlice<STATE> {
     this.stateInitial = Object.freeze(stateInitial);
     this.stateLast = { ...stateInitial };
     this.stateChanges = {};
+    this.reduce = this.reduce.bind(this);
   }
 
   public subscribe(callback: (state: STATE) => void) {
@@ -372,6 +298,7 @@ class StoreServiceSlice<STATE> {
       return;
     }
     this.subscriptions.push(callback);
+    return () => this.unsubscribe(callback);
   }
 
   public unsubscribe(callback: (state: STATE) => void) {
@@ -413,14 +340,6 @@ class StoreServiceSlice<STATE> {
     return hasChanged;
   }
 
-  addListener(onChange: () => void) {
-    const index = this.subscriptions.length;
-    this.subscriptions.push(onChange);
-    return () => {
-      this.subscriptions.slice(index, 1);
-    };
-  }
-
   /**
    * The redux reducer / handler
    * @param newState the full redux state
@@ -429,7 +348,7 @@ class StoreServiceSlice<STATE> {
   public reduce(storeState: any, action: IStoreAction) {
     const sliceState = lookup(storeState, this.path);
     let currentState = this.state;
-    const hasSliceChanged = objectsMatch(currentState, sliceState, 1) === false;
+    const hasSliceChanged = sameValue(currentState, sliceState, 1) === false;
     if (hasSliceChanged) {
       this.storeStateInternal = storeState;
       this.stateLast = sliceState || this.stateLast || this.stateInitial;
