@@ -7,9 +7,10 @@ and management of state slices, actions and reducers, seperately from
 components, Higher Order Components (HOCs) and providers. By emulating the
 behaviour of React Component state management, and interacting with the redux 
 store, each StoreService has the power and consistency of Redux, with the 
-convenience of a Component.
+convenience of a Component and the independence of a data-only model.
 
-*This tech is in development at the moment, I wouldn't recommend it yet.*
+**This tech is in development at the moment, I wouldn't recommend it yet.**
+*See the roadmap below*
 
 ### Goals
  - To simplify state management and propagation
