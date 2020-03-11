@@ -30,7 +30,7 @@ test("util: object pathing", () => {
   assert.equal(testObject.hello.world, false);
 });
 
-test("util: top level object diffing", () => {
+test("util: object diffing", () => {
   const obj1 = {
     a: 0,
     b: 1
@@ -47,35 +47,24 @@ test("util: top level object diffing", () => {
   const diffB = utils.diff(obj1, obj2);
   assert(diffB.a === undefined, "a is no different");
   assert(diffB.b === 2, "diffB's new b value should be 2");
-
-  obj2.b = { hello: "world" };
-  const diffC = utils.diff(obj1, obj2);
-  assert(typeof diffC === "object", "diffC's should be an object");
-  assert(typeof diffC.b === "object", "diffC's b value should be an object");
-  assert(diffC.b.hello === "world", "diffC's b.hello value should be 'world'");
 });
 
 test("util: sub-object diffing", () => {
-  const obj1 = {
-    a: { 
-      b: {
-        c: 2
-      }
-    }
-  };
-  const obj2 = {
-    a: { 
-      b: {
-        c: 2
-      }
-    }
-  };
+  const obj1 = {  a: {  b: {  c: 2  }  } };
+  const obj2 = {  a: {  b: {  c: 2  }  } };
+
   const topLevelA = utils.sameValue(obj1, obj2);
   assert(topLevelA, "subobjects should be matching");
 
   obj2.a.b.c = 3;
   const topLevelB = utils.sameValue(obj1, obj2);
   assert(topLevelB === false, "subobjects shouldn't be matching");
+
+  obj2.a.b = "hello world";
+  const diffC = utils.diff(obj1, obj2);
+  assert(typeof diffC === "object", "diffC's should be an object");
+  assert(typeof diffC.a.b === "string", "diffC's b value should be astring");
+  assert(diffC.a.b === "hello world", "diffC's b.hello value should be 'world'");
 });
 
 test("create an unattached store", () => {

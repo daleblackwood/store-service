@@ -85,7 +85,7 @@ export function isDotPath(s: string) {
  * @param depth the depth to compare
  * @returns true if the object structures match
  */
-export function sameValue(src: any, dest: any, depth = 2) {
+export function sameValue(src: any, dest: any, depth = 3) {
   return diff(src, dest, depth) === undefined;
 }
 
@@ -115,7 +115,7 @@ function consolodateKeys(...objs: Array<Record<string, any>>) {
  * @param depth the depth to compare, performs reference match beyond depth
  * @returns the structured differences, new value or undefined if the same
  */
-export function diff(src: any, dest: any, depth = 2): any {
+export function diff(src: any, dest: any, depth = 3): any {
   if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
     return src === dest ? undefined : dest;
   }
