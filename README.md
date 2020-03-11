@@ -86,9 +86,29 @@ probably best to add StoreServices _after_ your existing store definitions.
   );
 ```
 
+#### Using as a (p)react HOC
+```javascript
+function TitleComponentLayout({ title }) {
+  return <h1>{title}</h1>;
+}
+const TitleComponent = titleService.connect(React)(TitleComponentLayout);
+```
+
+#### Composing into (p)react HOCs with connect
+```javascript
+function TitleComponentLayout({ title }) {
+  return <h1>{title}</h1>;
+}
+const TitleComponent = compose(
+  middleware(),
+  titleService.connect(React)
+)(TitleLayoutComponent)
+```
+
 ### Changes
 **1.0.1**
   - React-Redux-like connect method provided through HOCs
+  - Class/component ready for extension
 
 ### Roadmap
 **1.1.0**
