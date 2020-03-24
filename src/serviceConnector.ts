@@ -8,7 +8,7 @@ type FunctionComponent<PROPS_TYPE> = (props: PROPS_TYPE) => any;
 
 export type ComponentType<PROPS_TYPE> = (props: PROPS_TYPE) => any | { props: PROPS_TYPE };
 
-declare class ReactComponent {
+declare class ReactComponent<T = {}> {
   state: any;
   props: any;
   constructor(props: any);
@@ -16,34 +16,16 @@ declare class ReactComponent {
 }
 
 export interface IReact {
-  Component: new (props: any) => ReactComponent;
+  Component: new <T>(props: any) => ReactComponent<T>;
   createElement: (element: any, props: any, children: any[]) => any;
   cloneElement: (element: any, props: any[], children: any[]) => any;
 }
 
-export type ConnectedProps<
-  PROPS_TYPE,
-  SERVICE_TYPE extends StoreService<STATE_TYPE>,
-  STATE_TYPE = any
-> = PROPS_TYPE & { service: SERVICE_TYPE, children: any[] } & STATE_TYPE;
-
-export type ConnectedComponent<
-  PROPS_TYPE,
-  SERVICE_TYPE extends StoreService<STATE_TYPE>,
-  STATE_TYPE = any
-> = FunctionComponent<ConnectedProps<PROPS_TYPE, SERVICE_TYPE, STATE_TYPE>>;
-
-export type ServiceConnector<
-  SERVICE_TYPE extends StoreService<STATE_TYPE>,
-  STATE_TYPE = any
-> = <PROPS_TYPE>(comp: FunctionComponent<PROPS_TYPE>) => ConnectedComponent<PROPS_TYPE, SERVICE_TYPE, STATE_TYPE>;
-
 export function serviceConnector<
-  SERVICE_TYPE extends StoreService<STATE_TYPE>,
-  STATE_TYPE = any
->(React: IReact, service: SERVICE_TYPE): any {
-  return <PROPS_TYPE>(component: ComponentType<PROPS_TYPE>) => {
-    return class WrappedComponent extends React.Component {
+  SERVICE_TYPE extends StoreService<any> = StoreService<any>
+>(React: IReact, service: SERVICE_TYPE) {
+  return (component: FunctionComponent<typeof service.state & { service: typeof service }>) => {
+    return class WrappedComponent extends React.Component<typeof service.state & { service: SERVICE_TYPE }> {
       state = { digest: 0, isMounted: false };
       constructor(props: any) {
         super(props);
@@ -58,7 +40,7 @@ export function serviceConnector<
         service.unsubscribe(this.updateState);
         this.setState({ isMounted: false });
       }
-      private updateState() {
+      updateState() {
         if (this.state.isMounted) {
           this.setState({ digest: this.state.digest + 1 });
         }
@@ -74,7 +56,7 @@ export function serviceConnector<
         }
         return React.createElement(renderComp, wrappedProps, null);
       }
-    }
+    };
   };
 }
 

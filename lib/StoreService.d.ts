@@ -1,22 +1,24 @@
 import { IReact } from "./serviceConnector";
+import { StoreDispatcher } from "./StoreDispatcher";
 /** Service state snapshot */
 export interface IServiceStateAction<T> {
     type: string;
     payload: Partial<T>;
 }
-interface IStoreAction<T = any> {
+export interface IStoreAction<T = any> {
     type: string;
     payload: T;
 }
-declare type StoreReducer<TState = any, TPayload = any> = (state: TState, action: IStoreAction<TPayload>) => TState;
-declare type StoreDispatch<TPayload = any> = (action: IStoreAction<TPayload>) => void;
-declare type StoreMiddleware = (store: IStore) => (next: StoreDispatch) => (action: IStoreAction) => any;
-interface IStore<TState = any> {
+export declare type StoreReducer<TState = any, TPayload = any> = (state: TState, action: IStoreAction<TPayload>) => TState;
+export declare type StoreDispatch<TPayload = any> = (action: IStoreAction<TPayload>) => void;
+export declare type StoreMiddleware = (store: IStore) => (next: StoreDispatch) => (action: IStoreAction) => any;
+export interface IStore<TState = any> {
     dispatch: StoreDispatch;
     getState: () => TState;
     subscribe: (listener: () => void) => () => void;
     replaceReducer: (nextReducers: StoreReducer) => StoreReducer;
 }
+export declare type ServiceMap = Record<string, StoreService<any>>;
 /**
  * StoreService is takes a small slice of the redux state and augments it with
  * business logic. It handles actions and reducers automatically, creating
@@ -33,66 +35,114 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
      * @param className the class name of the service
      */
     static get<T extends StoreService>(className: string): T;
+    /**
+     * Retreive the core service mapping
+     * @param className the class name of the service
+     * @returns the map of all services
+     */
     static getServiceMap(): Record<string, StoreService<any>>;
-    static getReducer(matchPaths?: string[]): StoreReducer;
+    /**
+     * Wrap the main store's reducer, for using the inbuilt service mechanisms.
+     * This should be your first point of entry.
+     * Although matchPaths can be specified, it's recommended for single stores
+     * (which are most applciations) to provide none, matching all services
+     * automatically.
+     * @param matchPaths paths of the reducers to match (not recommended)
+     * @returns a custom reducer, calling all matching paths
+     */
     static wrapReducer(storeReducer: StoreReducer, matchPaths?: string[]): StoreReducer;
-    static getMiddlewares(): StoreReducer[];
-    static getServices(matchPath?: string[]): Array<StoreService>;
-    static getMiddleware(): StoreMiddleware;
-    static staticStore: IStore;
+    /**
+     * To attach to the main store - this is required for dispatching to work.
+     * @param name specify a store name, for specific stores. default "default".
+     * @returns the middleware for all services
+     */
+    static getMiddleware(name?: string): StoreMiddleware;
+    /**
+     * Generate a custom service reducer matching the specified paths. This is
+     * for more advanced composing, wrapReducer is preferred.
+     * @param matchPaths paths of the reducers to match
+     * @returns a custom reducer, calling all matching paths
+     */
+    static getReducer(matchPaths?: string[]): StoreReducer;
+    static getServices(matchPath?: string[]): StoreService[];
+    /** A reference to the stores used */
+    static staticStore: Record<string, IStore>;
+    static hashPaths: boolean;
     /** The name of the action  */
     get STATE_KEY(): string;
     /** Returns a copy of the state, based on last known and changes */
     get state(): STATE;
-    connections: Array<{
-        comp: any;
-        sub?: any;
-    }>;
+    route: string;
     protected readonly stateInitial: STATE;
     private stateLast;
     private stateChanges;
-    private dispatchTimer;
     private subscriptions;
     private storeStateInternal;
     get storeState(): any;
+    storePath: string;
     private store;
-    path: string;
-    private isAttachedInternal;
-    get isAttached(): boolean;
+    protected dispatcher: StoreDispatcher;
     private hasInited;
-    constructor(path: string, stateInitial: STATE);
+    private isReducing;
+    constructor(storePath: string, stateInitial: STATE);
     /**
-     * Attaches the service to a reducer
-     * @param reducerObject the object containing the reducers
-     * @param customPath an optional path (default is pascal service name)
+     * Get the middleware for this service.
+     * It's recommended to use the static StoreService.getMiddleware() method
+     * over this one for single-store applications.
+     * @returns the middleware for this single service.
      */
     get middleware(): StoreMiddleware;
+    /**
+     * Get the reducer for this service.
+     * It's recommended to use the static StoreService.wrapReducer() method
+     * over this one for single-store applications.
+     * @returns the reducer for this single service.
+     */
     get reducer(): StoreReducer;
-    connect(React: IReact): any;
-    subscribe(callback: (state: STATE) => void): void;
-    unsubscribe(callback: (state: STATE) => void): void;
-    getSubscriptionIndex(callback: (state: STATE) => void): number;
+    /**
+     * Connect the service to a component as a HOC
+     * @returns a connector ready for running on a component or in a compose tree
+     */
+    connect<T = this>(React: IReact): (comp: (props: STATE & {
+        service: T;
+    }) => any) => any;
+    /**
+     * subscribe to the state changes of this service
+     * @param listener a callback that takes a new state as its only argument
+     * @returns a method that can be used for unsubscribing
+     */
+    subscribe(listener: (state: STATE) => void): () => void;
+    /**
+     * unsubscribe from the state changes of this service
+     * @param listener the callback that was subscribed to this service
+     */
+    unsubscribe(listener: (state: STATE) => void): void;
     /**
      * Update the state, similar to a React component
      * @param stateChanges The properties to alter on the state
      */
-    setState(stateChanges: Partial<STATE>): Promise<void>;
-    init(): void;
-    onConnect(component?: any): void;
-    addListener(onChange: () => void): () => void;
+    setState(stateChanges: Partial<STATE>): void;
+    private init;
     /**
-     * Updates the redux store at the end of the stack-frame
+     * Lifecycle method: overide to react to service initialisation
      */
-    protected dispatchScheduled(): Promise<void>;
+    onInit(): void;
     /**
-     * Updates the redux store now
+     * Lifecycle method: overide to react to component connections
      */
-    protected dispatchImmediate(): void;
+    onConnect(): void;
     /**
-     * Can be overriden to react to incoming state changes
+     * Lifecycle method: overide to react to incoming state changes
      * @param newState the full snapshot of changes properties
      */
     onState(newState: STATE): void;
+    /**
+     * Lifecycle method: overide to react to route updates
+     * @param route the pathname of the new location, sans hash
+     */
+    onRoute(route: string): void;
+    private getSubscriptionIndex;
+    private handleRouteChanges;
     /**
      * The redux reducer / handler
      * @param newState the full redux state

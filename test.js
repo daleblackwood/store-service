@@ -104,7 +104,7 @@ test("attach to the store", () => {
       counterReducer
     ),
     applyMiddleware(
-      ...StoreService.getMiddlewares()
+      StoreService.getMiddleware()
     )
   );
 });

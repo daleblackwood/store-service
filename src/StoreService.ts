@@ -3,13 +3,8 @@ import {
   serviceConnector,
 } from "./serviceConnector";
 
-import {
-  isDotPath,
-  lookup,
-  objectsMatch,
-  pascalCase,
-  set
-} from "./utils";
+import utils from "./utils";
+import { StoreDispatcher } from "./StoreDispatcher";
 
 /** Service state snapshot */
 export interface IServiceStateAction<T> {
@@ -17,18 +12,18 @@ export interface IServiceStateAction<T> {
   payload: Partial<T>
 }
 
-interface IStoreAction<T = any> { type: string, payload: T };
-type StoreReducer<TState = any, TPayload = any> = (state: TState, action: IStoreAction<TPayload>) => TState;
-type StoreDispatch<TPayload = any> = (action: IStoreAction<TPayload>) => void;
-type StoreMiddleware = (store: IStore) => (next: StoreDispatch) => (action: IStoreAction) => any;
-interface IStore<TState = any> {
+export interface IStoreAction<T = any> { type: string, payload: T };
+export type StoreReducer<TState = any, TPayload = any> = (state: TState, action: IStoreAction<TPayload>) => TState;
+export type StoreDispatch<TPayload = any> = (action: IStoreAction<TPayload>) => void;
+export type StoreMiddleware = (store: IStore) => (next: StoreDispatch) => (action: IStoreAction) => any;
+export interface IStore<TState = any> {
   dispatch: StoreDispatch;
   getState: () => TState;
   subscribe: (listener: () => void) => () => void;
   replaceReducer: (nextReducers: StoreReducer) => StoreReducer;
 }
 
-type ServiceMap = Record<string, StoreService<any>>;
+export type ServiceMap = Record<string, StoreService<any>>;
 
 /**
  * StoreService is takes a small slice of the redux state and augments it with
@@ -56,6 +51,11 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return this.getServiceMap()[className] as T || null;
   }
 
+  /**
+   * Retreive the core service mapping
+   * @param className the class name of the service
+   * @returns the map of all services
+   */
   static getServiceMap() {
     const mapParent: any = typeof window !== "undefined" ? window : this;
     if (!mapParent.services) {
@@ -64,6 +64,45 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return mapParent.services as ServiceMap;
   }
 
+  /**
+   * Wrap the main store's reducer, for using the inbuilt service mechanisms.
+   * This should be your first point of entry.
+   * Although matchPaths can be specified, it's recommended for single stores
+   * (which are most applciations) to provide none, matching all services
+   * automatically.
+   * @param matchPaths paths of the reducers to match (not recommended)
+   * @returns a custom reducer, calling all matching paths
+   */
+  static wrapReducer(storeReducer: StoreReducer, matchPaths?: string[]): StoreReducer {
+    const serviceReducer = this.getReducer(matchPaths);
+    return (state: any, action: IStoreAction<any>) => {
+      state = storeReducer(state, action);
+      state = serviceReducer(state, action);
+      return state;
+    };
+  }
+
+  /**
+   * To attach to the main store - this is required for dispatching to work.
+   * @param name specify a store name, for specific stores. default "default".
+   * @returns the middleware for all services
+   */
+  static getMiddleware(name: string = "default"): StoreMiddleware {
+    return store => {
+      if (this.staticStore[name]) {
+        throw new Error("Store " + name + " is already connected.");
+      }
+      this.staticStore[name] = store;
+      return next => action => next(action);
+    };
+  }
+
+  /**
+   * Generate a custom service reducer matching the specified paths. This is
+   * for more advanced composing, wrapReducer is preferred.
+   * @param matchPaths paths of the reducers to match
+   * @returns a custom reducer, calling all matching paths
+   */
   static getReducer(matchPaths?: string[]): StoreReducer {
     return (state: any, action: IStoreAction<any>) => {
       const services = this.getServices(matchPaths);
@@ -77,25 +116,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     };
   }
 
-  static wrapReducer(storeReducer: StoreReducer, matchPaths?: string[]): StoreReducer {
-    return (state: any, action: IStoreAction<any>) => {
-      state = storeReducer(state, action);
-      const services = this.getServices(matchPaths);
-      for (const service of services) {
-        const reducer = service.reducer;
-        if (reducer) {
-          state = reducer(state, action);
-        }
-      }
-      return state;
-    };
-  }
-
-  static getMiddlewares(): StoreReducer[] {
-    return this.getServices().map(x => x.middleware);
-  }
-
-  static getServices(matchPath?: string[]): Array<StoreService> {
+  static getServices(matchPath?: string[]): StoreService[] {
     if (typeof matchPath === "string") {
       matchPath = [matchPath];
     }
@@ -105,7 +126,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
       if (serviceMap.hasOwnProperty(key)) {
         const service = serviceMap[key];
         if (matchPath) {
-          const match = matchPath.find(x => service.path.includes(x));
+          const match = matchPath.find(x => service.storePath.includes(x));
           if (!match) {
             continue;
           }
@@ -116,105 +137,115 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     return result;
   }
 
-  static getMiddleware(): StoreMiddleware {
-    return store => {
-      this.staticStore = store;
-      return next => action => next(action);
-    };
-  }
+  /** A reference to the stores used */
+  static staticStore: Record<string, IStore> = {};
 
-  static staticStore: IStore = null;
+  static hashPaths = false;
 
   /** The name of the action  */
-  get STATE_KEY(): string {
-    return pascalCase("Service" + this.constructor.name.toLowerCase());
+  public get STATE_KEY(): string {
+    return utils.pascalCase("Service_" + this.constructor.name.toLowerCase());
   }
 
   /** Returns a copy of the state, based on last known and changes */
-  get state(): STATE {
+  public get state(): STATE {
     return { ...this.stateLast, ...this.stateChanges };
   }
 
-  connections: Array<{ comp: any, sub?: any }> = [];
+  public route: string;
 
   protected readonly stateInitial: STATE;
 
   private stateLast: STATE;
   private stateChanges: Partial<STATE>;
-  private dispatchTimer: any;
   private subscriptions: Array<(state: STATE) => void> = [];
 
   private storeStateInternal: any;
   get storeState(): any { return this.storeStateInternal; }
 
+  public storePath: string;
+
   private store: IStore;
-  path: string;
-
-  private isAttachedInternal: boolean;
-  get isAttached(): boolean { return this.isAttachedInternal; }
-
+  protected dispatcher: StoreDispatcher;
   private hasInited = false;
+  private isReducing = false;
 
-  constructor(path: string, stateInitial: STATE) {
-    if (isDotPath(path) === false) {
-      throw new Error("Service slice name must be dot path - got " + path);
+  constructor(storePath: string, stateInitial: STATE) {
+    if (utils.isDotPath(storePath) === false) {
+      throw new Error("Service slice name must be dot path - got " + storePath);
     }
-    this.path = path;
+    this.storePath = storePath;
     this.stateInitial = Object.freeze(stateInitial);
     this.stateLast = { ...stateInitial };
     this.stateChanges = {};
+
+    this.handleRouteChanges = this.handleRouteChanges.bind(this);
+    this.dispatcher = new StoreDispatcher();
   }
 
   /**
-   * Attaches the service to a reducer
-   * @param reducerObject the object containing the reducers
-   * @param customPath an optional path (default is pascal service name)
+   * Get the middleware for this service.
+   * It's recommended to use the static StoreService.getMiddleware() method
+   * over this one for single-store applications.
+   * @returns the middleware for this single service.
    */
-  get middleware(): StoreMiddleware {
+  public get middleware(): StoreMiddleware {
     return store => {
       this.store = store;
+      this.dispatcher.store = store;
       return next => action => next(action);
     };
   }
 
-  get reducer(): StoreReducer {
+  /**
+   * Get the reducer for this service.
+   * It's recommended to use the static StoreService.wrapReducer() method
+   * over this one for single-store applications.
+   * @returns the reducer for this single service.
+   */
+  public get reducer(): StoreReducer {
     return this.reduce.bind(this) as StoreReducer;
   }
 
-  connect(React: IReact) {
+  /**
+   * Connect the service to a component as a HOC
+   * @returns a connector ready for running on a component or in a compose tree
+   */
+  public connect<T = this>(React: IReact): (comp: (props: STATE & {service: T}) => any) => any {
     return serviceConnector(React, this);
   }
 
-  public subscribe(callback: (state: STATE) => void) {
-    const index = this.getSubscriptionIndex(callback);
+  /**
+   * subscribe to the state changes of this service
+   * @param listener a callback that takes a new state as its only argument
+   * @returns a method that can be used for unsubscribing
+   */
+  public subscribe(listener: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(listener);
     if (index >= 0) {
       return;
     }
-    this.subscriptions.push(callback);
+    this.subscriptions.push(listener);
+    return () => this.unsubscribe(listener);
   }
 
-  public unsubscribe(callback: (state: STATE) => void) {
-    const index = this.getSubscriptionIndex(callback);
+  /**
+   * unsubscribe from the state changes of this service
+   * @param listener the callback that was subscribed to this service
+   */
+  public unsubscribe(listener: (state: STATE) => void) {
+    const index = this.getSubscriptionIndex(listener);
     if (index < 0) {
       return;
     }
     this.subscriptions.splice(index, 1);
   }
 
-  public getSubscriptionIndex(callback: (state: STATE) => void) {
-    for (let i = this.subscriptions.length - 1; i >= 0; i--) {
-      if (this.subscriptions[i] === callback) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
   /**
    * Update the state, similar to a React component
    * @param stateChanges The properties to alter on the state
    */
-  setState(stateChanges: Partial<STATE>): Promise<void> {
+  public setState(stateChanges: Partial<STATE>): void {
     this.stateChanges = this.stateChanges || {};
     let hasChanged = false;
     for (const key in stateChanges) {
@@ -229,53 +260,74 @@ export class StoreService<STATE extends Record<string, any> = {}> {
         hasChanged = true;
       }
     }
-    if (hasChanged) {
-      return this.dispatchScheduled();
-    }
-  }
-
-  public init() {}
-
-  public onConnect(component?: any) {}
-
-  addListener(onChange: () => void) {
-    const index = this.subscriptions.length;
-    this.subscriptions.push(onChange);
-    return () => {
-      this.subscriptions.slice(index, 1);
-    };
-  }
-
-  /**
-   * Updates the redux store at the end of the stack-frame
-   */
-  protected dispatchScheduled(): Promise<void> {
-    clearTimeout(this.dispatchTimer);
-    return new Promise(r => setTimeout(() => {
-      this.dispatchImmediate();
-      r();
-    }, 0));
-  }
-
-  /**
-   * Updates the redux store now
-   */
-  protected dispatchImmediate() {
-    clearTimeout(this.dispatchTimer);
-    const store = this.store || StoreService.staticStore;
-    if (store) {
-      store.dispatch({
+    if (hasChanged && this.isReducing !== true) {
+      this.dispatcher.dispatch({
         type: this.STATE_KEY,
         payload: this.stateChanges
       });
     }
   }
 
+  private init() {
+    if (typeof location !== "undefined") {
+      let lastPathname = location.pathname;
+      setInterval(() => {
+        if (lastPathname !== location.pathname) {
+          lastPathname = location.pathname;
+          this.handleRouteChanges();
+        }
+      }, 17);
+    }
+    this.onInit();
+    this.handleRouteChanges();
+  }
+
   /**
-   * Can be overriden to react to incoming state changes
+   * Lifecycle method: overide to react to service initialisation
+   */
+  public onInit() {}
+
+  /**
+   * Lifecycle method: overide to react to component connections
+   */
+  public onConnect() {}
+
+  /**
+   * Lifecycle method: overide to react to incoming state changes
    * @param newState the full snapshot of changes properties
    */
-  onState(newState: STATE) {}
+  public onState(newState: STATE) {}
+
+  /**
+   * Lifecycle method: overide to react to route updates
+   * @param route the pathname of the new location, sans hash
+   */
+  public onRoute(route: string) {}
+
+  private getSubscriptionIndex(callback: (state: STATE) => void) {
+    for (let i = this.subscriptions.length - 1; i >= 0; i--) {
+      if (this.subscriptions[i] === callback) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private handleRouteChanges() {
+    if (typeof location === "undefined") {
+      return;
+    }
+    let route = StoreService.hashPaths ? location.hash : location.pathname;
+    route = route.replace(/\\/g, "/");
+    if (route.charAt(0) === "#") {
+      route = route.substr(1);
+    }
+    while (route.charAt(0) === "/") {
+      route = route.substr(1);
+    }
+    this.route = route;
+    this.onRoute(route);
+  }
 
   /**
    * The redux reducer / handler
@@ -283,10 +335,12 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    * @param action the acton updating
    */
   private reduce(storeState: any, action: IStoreAction) {
-    const sliceState = lookup(storeState, this.path);
+    this.isReducing = true;
+    const sliceState = utils.lookup(storeState, this.storePath);
     let currentState = this.state;
-    const hasSliceChanged = objectsMatch(currentState, sliceState, 1) === false;
+    const hasSliceChanged = utils.objectsMatch(currentState, sliceState, 2) === false;
     if (hasSliceChanged) {
+      console.log("has changed");
       this.storeStateInternal = storeState;
       this.stateLast = sliceState || this.stateLast || this.stateInitial;
       this.stateChanges = {};
@@ -295,7 +349,11 @@ export class StoreService<STATE extends Record<string, any> = {}> {
       if (!storeState) {
         storeState = {};
       }
-      set(storeState, this.path, currentState);
+      if (this.hasInited === false) {
+        this.hasInited = true;
+        this.init();
+      }
+      utils.set(storeState, this.storePath, currentState);
       this.onState(currentState);
       setTimeout(() => {
         for (const subcription of this.subscriptions) {
@@ -303,10 +361,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
         }
       }, 0);
     }
-    if (this.hasInited === false) {
-      this.hasInited = true;
-      this.init();
-    }
+    this.isReducing = false;
     return storeState;
   }
 
