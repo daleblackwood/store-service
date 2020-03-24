@@ -27,13 +27,33 @@ declare namespace utils {
      */
     function isDotPath(s: string): boolean;
     /**
+     * checks to see if value are equivalent up to a certain depth
+     * uses strict equality under the specified depth
+     * @param a the first of the two values to compare
+     * @param b the second of the two values to compare
+     * @param depth the depth to compare
+     * @returns true if the values / structures match
+     */
+    function valuesMatch(src: any, dest: any, depth?: number): boolean;
+    /**
      * checks to see if objects are equivalent up to a certain depth
      * uses strict equality under the specified depth
+     * same as valuesMatch but with object detection
+     * null is allowed
      * @param a the first of the two objects to compare
      * @param b the second of the two objects to compare
      * @param depth the depth to compare
+     * @returns true if the object structures match
      */
-    function objectsMatch(a: any, b: any, depth?: number): boolean;
+    function objectsMatch(src: any, dest: any, depth?: number): boolean;
+    /**
+     * Calculates the difference between two object/value structures
+     * @param src the first state of the object/value
+     * @param dest the second state of the object/value
+     * @param depth the depth to compare, performs reference match beyond depth
+     * @returns the structured differences, new value or undefined if the same
+     */
+    function valueDiff(src: any, dest: any, depth?: number): any;
     /**
      * converts an arbitrary alpha-numeric string into an
      * array of words

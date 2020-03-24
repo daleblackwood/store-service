@@ -1,4 +1,5 @@
 namespace utils {
+
   /**
    * Looks up the dot path of an object
    * @param obj the object to look at
@@ -79,51 +80,108 @@ namespace utils {
   }
 
   /**
-   * checks to see if objects are equivalent up to a certain depth
+   * checks to see if value are equivalent up to a certain depth
    * uses strict equality under the specified depth
-   * @param a the first of the two objects to compare
-   * @param b the second of the two objects to compare
+   * @param a the first of the two values to compare
+   * @param b the second of the two values to compare 
    * @param depth the depth to compare
+   * @returns true if the values / structures match
    */
-  export function objectsMatch(a: any, b: any, depth = 2) {
-    return presentValuesMatch(a, b, depth) && presentValuesMatch(b, a, depth);
+  export function valuesMatch(src: any, dest: any, depth = 3) {
+    return valueDiff(src, dest, depth) === undefined;
   }
 
-  function presentValuesMatch(src: any, dest: any, depth = 2) {
-    if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
-      return src === dest;
+  /**
+   * checks to see if objects are equivalent up to a certain depth
+   * uses strict equality under the specified depth
+   * same as valuesMatch but with object detection
+   * null is allowed
+   * @param a the first of the two objects to compare
+   * @param b the second of the two objects to compare 
+   * @param depth the depth to compare
+   * @returns true if the object structures match
+   */
+  export function objectsMatch(src: any, dest: any, depth = 3) {
+    if (typeof src !== "object") {
+      throw new Error("src is not object");
     }
-    if (src === "function" || src instanceof Date) {
-      return String(src) == String(dest);
+    if (typeof dest !== "object") {
+      throw new Error("dest is not object");
+    }
+    return valuesMatch(src, dest);
+  }
+
+  function consolodateKeys(...objs: Array<Record<string, any>>) {
+    const keys: any = {};
+    for (const obj of objs) {
+      if (!obj || typeof obj !== "object") {
+        throw new Error("Non-object value");
+      }
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          keys[key] = true;
+        }
+      }
+    }
+    const result: string[] = [];
+    for (const key in keys) {
+      result.push(key);
+    }
+    return result;
+  }
+
+  /**
+   * Calculates the difference between two object/value structures
+   * @param src the first state of the object/value
+   * @param dest the second state of the object/value
+   * @param depth the depth to compare, performs reference match beyond depth
+   * @returns the structured differences, new value or undefined if the same
+   */
+  export function valueDiff(src: any, dest: any, depth = 3): any {
+    if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
+      return src === dest ? undefined : dest;
+    }
+    if (typeof src === "function" || src instanceof Date) {
+      return String(src) === String(dest) ? undefined : dest;
     }
     if ((src === null) !== (dest === null)) {
-      return false;
+      return dest;
     }
     if (typeof src === "object") {
       if (typeof dest !== "object") {
-        return false;
+        return dest;
       }
-      if (depth > 0) {
-        for (const key in src) {
-          if (src.hasOwnProperty(key)) {
-            if (dest.hasOwnProperty(key) === false) {
-              return false;
-            }
-            if (presentValuesMatch(src[key], dest[key], depth - 1) === false) {
-              return false;
-            }
+
+      const result: Record<string, any> = {};
+
+      const allKeys = consolodateKeys(src, dest);
+      for (const key of allKeys) {
+        if (src.hasOwnProperty(key) === false) {
+          result[key] = dest[key];
+          continue;
+        }
+        if (dest.hasOwnProperty(key) === false) {
+          result[key] = undefined;
+          continue;
+        }
+        if (depth > 0) {
+          const subdif = valueDiff(src[key], dest[key], depth - 1);
+          if (subdif) {
+            result[key] = subdif;
+            continue;
+          }
+        } else {
+          if (src[key] !== dest[key]) {
+            result[key] = dest[key];
+            continue;
           }
         }
-      } else {
-        for (const key in src) {
-          if (src.hasOwnProperty(key)) {
-            if (src[key] !== dest[key])
-              return false;
-          }
-        }
+      }
+      if (consolodateKeys(result).length > 0) {
+        return result;
       }
     }
-    return true;
+    return undefined;
   }
 
   /**
