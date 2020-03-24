@@ -338,7 +338,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     this.isReducing = true;
     const sliceState = utils.lookup(storeState, this.storePath);
     let currentState = this.state;
-    const hasSliceChanged = utils.objectsMatch(currentState, sliceState, 2) === false;
+    const hasSliceChanged = utils.objectsMatch(currentState, sliceState, 3) === false;
     if (hasSliceChanged) {
       console.log("has changed");
       this.storeStateInternal = storeState;
