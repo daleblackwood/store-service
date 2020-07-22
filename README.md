@@ -9,8 +9,12 @@ behaviour of React Component state management, and interacting with the redux
 store, each StoreService has the power and consistency of Redux, with the 
 convenience of a Component and the independence of a data-only model.
 
-**This tech is in development at the moment, I wouldn't recommend it yet.**
-*See the roadmap below*
+**Version 2.0 changes.**
+Version 2.0 has been hardened by some real world projects and as a result some
+breaking changes have been introduced:
+  - The service declaration requires a name as the first parameter
+
+That's it - it shouldn't take long to adapt.
 
 ### Goals
  - To simplify state management and propagation
