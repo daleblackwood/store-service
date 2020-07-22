@@ -113,7 +113,7 @@ const TitleComponent = compose(
 
 ### Changes
 **2.0.0**
-  - Breaking: services are names on construction
+  - Breaking: services require names on construction
   - own internal state management for better Observable run
   - subscription optimisation for better Observable run
   - convenient multiServiceConnector HOC to connect multiple services
