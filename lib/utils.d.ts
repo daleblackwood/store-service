@@ -36,16 +36,10 @@ declare namespace utils {
      */
     function valuesMatch(src: any, dest: any, depth?: number): boolean;
     /**
-     * checks to see if objects are equivalent up to a certain depth
-     * uses strict equality under the specified depth
-     * same as valuesMatch but with object detection
-     * null is allowed
-     * @param a the first of the two objects to compare
-     * @param b the second of the two objects to compare
-     * @param depth the depth to compare
-     * @returns true if the object structures match
+     * @deprecated use valuesMatch
      */
-    function objectsMatch(src: any, dest: any, depth?: number): boolean;
+    const objectsMatch: typeof valuesMatch;
+    function collectKeys(...objs: Array<Record<string, any>>): string[];
     /**
      * Calculates the difference between two object/value structures
      * @param src the first state of the object/value
@@ -53,7 +47,8 @@ declare namespace utils {
      * @param depth the depth to compare, performs reference match beyond depth
      * @returns the structured differences, new value or undefined if the same
      */
-    function valueDiff(src: any, dest: any, depth?: number): any;
+    function valueDiff<T = any>(src: T, dest: T, depth?: number): Partial<T> | undefined;
+    function clone<T = any>(obj: T, maxDepth?: number): T;
     /**
      * converts an arbitrary alpha-numeric string into an
      * array of words
@@ -62,4 +57,4 @@ declare namespace utils {
      */
     function toWords(key: string): string[];
 }
-export = utils;
+export default utils;

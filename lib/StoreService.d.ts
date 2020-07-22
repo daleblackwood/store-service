@@ -29,7 +29,7 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
      * Create a static, global StoreService singleton
      * @param serviceClassDefinition The class definition for the service.
      */
-    static define<T extends StoreService>(serviceClassDefinition: new () => T): T;
+    static define<T extends StoreService>(id: string, serviceClassDefinition: new () => T): T;
     /**
      * Retreive a service by class name
      * @param className the class name of the service
@@ -67,9 +67,9 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
     static getServices(matchPath?: string[]): StoreService[];
     /** A reference to the stores used */
     static staticStore: Record<string, IStore>;
-    static hashPaths: boolean;
+    static readonly diffLevel = 3;
     /** The name of the action  */
-    get STATE_KEY(): string;
+    get ACTION_TYPE(): string;
     /** Returns a copy of the state, based on last known and changes */
     get state(): STATE;
     route: string;
@@ -82,8 +82,9 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
     storePath: string;
     private store;
     protected dispatcher: StoreDispatcher;
-    private hasInited;
+    hasInited: boolean;
     private isReducing;
+    private timerUpdateState;
     constructor(storePath: string, stateInitial: STATE);
     /**
      * Get the middleware for this service.
@@ -133,9 +134,13 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
     onConnect(): void;
     /**
      * Lifecycle method: overide to react to incoming state changes
-     * @param newState the full snapshot of changes properties
+     * @param stateChanges the full snapshot of changes properties
      */
-    onState(newState: STATE): void;
+    protected onStateChanging(stateChanges: Partial<STATE>): Partial<STATE>;
+    protected callStateChanged(newState?: STATE): void;
+    protected scheduleStateChanged(newState?: STATE): void;
+    protected onStateChanged(): void;
+    protected onReduce(): void;
     /**
      * Lifecycle method: overide to react to route updates
      * @param route the pathname of the new location, sans hash
@@ -143,6 +148,11 @@ export declare class StoreService<STATE extends Record<string, any> = {}> {
     onRoute(route: string): void;
     private getSubscriptionIndex;
     private handleRouteChanges;
+    /**
+     * The redux reducer / handler
+     * @param newState the full redux state
+     * @param action the acton updating
+     */
     /**
      * The redux reducer / handler
      * @param newState the full redux state

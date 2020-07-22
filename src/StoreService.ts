@@ -36,10 +36,9 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    * Create a static, global StoreService singleton
    * @param serviceClassDefinition The class definition for the service.
    */
-  static define<T extends StoreService>(serviceClassDefinition: new() => T): T {
-    const className = serviceClassDefinition.name;
+  static define<T extends StoreService>(id: string, serviceClassDefinition: new() => T): T {
     const serviceMap = this.getServiceMap();
-    const service = serviceMap[className] = serviceMap[className] || new serviceClassDefinition();
+    const service = serviceMap[id] = serviceMap[id] || new serviceClassDefinition();
     return service as T;
   }
 
@@ -89,9 +88,6 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    */
   static getMiddleware(name: string = "default"): StoreMiddleware {
     return store => {
-      if (this.staticStore[name]) {
-        throw new Error("Store " + name + " is already connected.");
-      }
       this.staticStore[name] = store;
       return next => action => next(action);
     };
@@ -140,10 +136,10 @@ export class StoreService<STATE extends Record<string, any> = {}> {
   /** A reference to the stores used */
   static staticStore: Record<string, IStore> = {};
 
-  static hashPaths = false;
+  static readonly diffLevel = 3;
 
   /** The name of the action  */
-  public get STATE_KEY(): string {
+  public get ACTION_TYPE(): string {
     return utils.pascalCase("Service_" + this.constructor.name.toLowerCase());
   }
 
@@ -167,8 +163,9 @@ export class StoreService<STATE extends Record<string, any> = {}> {
 
   private store: IStore;
   protected dispatcher: StoreDispatcher;
-  private hasInited = false;
+  public hasInited = false;
   private isReducing = false;
+  private timerUpdateState: any;
 
   constructor(storePath: string, stateInitial: STATE) {
     if (utils.isDotPath(storePath) === false) {
@@ -226,6 +223,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
       return;
     }
     this.subscriptions.push(listener);
+    listener(this.state);
     return () => this.unsubscribe(listener);
   }
 
@@ -260,23 +258,33 @@ export class StoreService<STATE extends Record<string, any> = {}> {
         hasChanged = true;
       }
     }
-    if (hasChanged && this.isReducing !== true) {
-      this.dispatcher.dispatch({
-        type: this.STATE_KEY,
-        payload: this.stateChanges
-      });
+    if (hasChanged) {
+      if (this.isReducing) {
+        this.dispatcher.dispatchNext({
+          type: this.ACTION_TYPE,
+          payload: this.stateChanges
+        });
+      } else {
+        this.dispatcher.dispatch({
+          type: this.ACTION_TYPE,
+          payload: this.stateChanges
+        });
+      }
+      this.scheduleStateChanged();
     }
   }
 
   private init() {
     if (typeof location !== "undefined") {
       let lastPathname = location.pathname;
-      setInterval(() => {
+      const checkLocation = () => {
         if (lastPathname !== location.pathname) {
           lastPathname = location.pathname;
           this.handleRouteChanges();
         }
-      }, 17);
+        setTimeout(checkLocation, 100);
+      };
+      checkLocation();
     }
     this.onInit();
     this.handleRouteChanges();
@@ -294,9 +302,29 @@ export class StoreService<STATE extends Record<string, any> = {}> {
 
   /**
    * Lifecycle method: overide to react to incoming state changes
-   * @param newState the full snapshot of changes properties
+   * @param stateChanges the full snapshot of changes properties
    */
-  public onState(newState: STATE) {}
+  protected onStateChanging(stateChanges: Partial<STATE>): Partial<STATE> {
+    return stateChanges;
+  }
+
+  protected callStateChanged(newState?: STATE) {
+    this.onStateChanged();
+    for (const subcription of this.subscriptions) {
+      subcription(newState || this.state);
+    }
+  }
+
+  protected scheduleStateChanged(newState?: STATE) {
+    clearTimeout(this.timerUpdateState);
+    if (this.hasInited) {
+      this.timerUpdateState = setTimeout(() => this.callStateChanged(newState), 0);
+    }
+  }
+
+  protected onStateChanged() {}
+
+  protected onReduce() {}
 
   /**
    * Lifecycle method: overide to react to route updates
@@ -317,7 +345,7 @@ export class StoreService<STATE extends Record<string, any> = {}> {
     if (typeof location === "undefined") {
       return;
     }
-    let route = StoreService.hashPaths ? location.hash : location.pathname;
+    let route = location.pathname;
     route = route.replace(/\\/g, "/");
     if (route.charAt(0) === "#") {
       route = route.substr(1);
@@ -334,32 +362,39 @@ export class StoreService<STATE extends Record<string, any> = {}> {
    * @param newState the full redux state
    * @param action the acton updating
    */
+  /**
+   * The redux reducer / handler
+   * @param newState the full redux state
+   * @param action the acton updating
+   */
   private reduce(storeState: any, action: IStoreAction) {
-    this.isReducing = true;
-    const sliceState = utils.lookup(storeState, this.storePath);
-    let currentState = this.state;
-    const hasSliceChanged = utils.objectsMatch(currentState, sliceState, 3) === false;
-    if (hasSliceChanged) {
-      console.log("has changed");
+    if (storeState) {
       this.storeStateInternal = storeState;
-      this.stateLast = sliceState || this.stateLast || this.stateInitial;
+    } else {
+      storeState = {};
+    }
+
+    this.isReducing = true;
+    this.onReduce();
+    const incomingState = utils.lookup(storeState, this.storePath);
+    const currentState = this.state;
+    const incomingDiff = utils.valueDiff(currentState, incomingState, 3);
+
+    // apply external changes
+    if (incomingDiff || utils.collectKeys(this.stateChanges).length > 0) {
+      const combinedChanges = { ...incomingState, ...this.stateChanges };
+      const parsedChanges = { ...this.onStateChanging(combinedChanges) };
+      this.stateLast = {
+        ...this.stateLast,
+        ...parsedChanges
+      };
       this.stateChanges = {};
-      this.stateLast = currentState;
-      this.stateChanges = {};
-      if (!storeState) {
-        storeState = {};
-      }
-      if (this.hasInited === false) {
-        this.hasInited = true;
-        this.init();
-      }
-      utils.set(storeState, this.storePath, currentState);
-      this.onState(currentState);
-      setTimeout(() => {
-        for (const subcription of this.subscriptions) {
-          subcription(currentState);
-        }
-      }, 0);
+      utils.set(storeState, this.storePath, this.stateLast);
+      this.scheduleStateChanged();
+    }
+    if (this.hasInited === false) {
+      this.hasInited = true;
+      this.init();
     }
     this.isReducing = false;
     return storeState;

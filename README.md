@@ -39,6 +39,7 @@ Service declaration should be easy: extend the `StoreService` class and wrap it
 in a `StoreService.define()`:
 ```javascript
 const service = StoreService.define(
+  "serviceName",
   class TestService extends StoreService {
     constructor() {
       super("testData", { a: 1, b: 2 });
@@ -107,12 +108,17 @@ const TitleComponent = compose(
 ```
 
 ### Changes
+**2.0.0**
+  - Breaking: services are names on construction
+  - own internal state management for better Observable run
+  - subscription optimisation for better Observable run
+  - convenient multiServiceConnector HOC to connect multiple services
+  - better diffing
+
 **1.0.1**
   - React-Redux-like connect method provided through HOCs
   - React/Preact abstractions
 
 ### Roadmap
-**1.1.0**
-  - service state change diffing from global store into state slice
-  - component state change diffing from HOC prior to render
-  - Class/component ready for extension
+**2.1.0**
+  - read-only mode (can influence store but not vice versa)

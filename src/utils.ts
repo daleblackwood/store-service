@@ -83,39 +83,25 @@ namespace utils {
    * checks to see if value are equivalent up to a certain depth
    * uses strict equality under the specified depth
    * @param a the first of the two values to compare
-   * @param b the second of the two values to compare 
+   * @param b the second of the two values to compare
    * @param depth the depth to compare
    * @returns true if the values / structures match
    */
-  export function valuesMatch(src: any, dest: any, depth = 3) {
-    return valueDiff(src, dest, depth) === undefined;
+  export function valuesMatch(src: any, dest: any, depth = 3): boolean {
+    const diff = valueDiff(src, dest, depth);
+    return diff === undefined;
   }
 
   /**
-   * checks to see if objects are equivalent up to a certain depth
-   * uses strict equality under the specified depth
-   * same as valuesMatch but with object detection
-   * null is allowed
-   * @param a the first of the two objects to compare
-   * @param b the second of the two objects to compare 
-   * @param depth the depth to compare
-   * @returns true if the object structures match
+   * @deprecated use valuesMatch
    */
-  export function objectsMatch(src: any, dest: any, depth = 3) {
-    if (typeof src !== "object") {
-      throw new Error("src is not object");
-    }
-    if (typeof dest !== "object") {
-      throw new Error("dest is not object");
-    }
-    return valuesMatch(src, dest);
-  }
+  export const objectsMatch = valuesMatch;
 
-  function consolodateKeys(...objs: Array<Record<string, any>>) {
+  export function collectKeys(...objs: Array<Record<string, any>>) {
     const keys: any = {};
     for (const obj of objs) {
       if (!obj || typeof obj !== "object") {
-        throw new Error("Non-object value");
+        continue;
       }
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
@@ -125,7 +111,9 @@ namespace utils {
     }
     const result: string[] = [];
     for (const key in keys) {
-      result.push(key);
+      if (keys.hasOwnProperty(key)) {
+        result.push(key);
+      }
     }
     return result;
   }
@@ -137,7 +125,7 @@ namespace utils {
    * @param depth the depth to compare, performs reference match beyond depth
    * @returns the structured differences, new value or undefined if the same
    */
-  export function valueDiff(src: any, dest: any, depth = 3): any {
+  export function valueDiff<T = any>(src: T, dest: T, depth = 3): Partial<T> | undefined {
     if (typeof src === "string" || typeof src === "number" || typeof src === "boolean") {
       return src === dest ? undefined : dest;
     }
@@ -154,10 +142,10 @@ namespace utils {
 
       const result: Record<string, any> = {};
 
-      const allKeys = consolodateKeys(src, dest);
+      const allKeys = collectKeys(src, dest);
       for (const key of allKeys) {
         if (src.hasOwnProperty(key) === false) {
-          result[key] = dest[key];
+          result[key] = (dest as any)[key];
           continue;
         }
         if (dest.hasOwnProperty(key) === false) {
@@ -165,23 +153,27 @@ namespace utils {
           continue;
         }
         if (depth > 0) {
-          const subdif = valueDiff(src[key], dest[key], depth - 1);
-          if (subdif) {
+          const subdif = valueDiff((src as any)[key], (dest as any)[key], depth - 1);
+          if (subdif !== undefined) {
             result[key] = subdif;
             continue;
           }
         } else {
-          if (src[key] !== dest[key]) {
-            result[key] = dest[key];
+          if (String((src as any)[key]) !== String((dest as any)[key])) {
+            result[key] = (dest as any)[key];
             continue;
           }
         }
       }
-      if (consolodateKeys(result).length > 0) {
-        return result;
+      if (collectKeys(result).length > 0) {
+        return result as Partial<T>;
       }
     }
     return undefined;
+  }
+
+  export function clone<T = any>(obj: T, maxDepth = 3): T {
+    return valueDiff({}, obj, maxDepth) as T;
   }
 
   /**
@@ -208,8 +200,11 @@ namespace utils {
         word = "";
       }
     }
+    if (word) {
+      result.push(word);
+    }
     return result;
   }
 }
 
-export = utils;
+export default utils;

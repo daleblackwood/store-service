@@ -3,7 +3,7 @@
 const assert = require("assert");
 const { applyMiddleware, createStore } = require("redux");
 const { StoreService } = require("./lib/StoreService");
-const utils = require("./lib/utils");
+const { default: utils } = require("./lib/utils");
 
 /*------------------/
      START TESTS
@@ -88,7 +88,7 @@ test("create an unattached store", () => {
 });
 
 test("attach to the store", () => {
-  service = StoreService.define(
+  service = StoreService.define("testService",
     class TestService extends StoreService {
       constructor() {
         super("testData", { a: 1, b: 2 });

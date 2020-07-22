@@ -17,9 +17,22 @@ export interface IReact {
 export declare function serviceConnector<SERVICE_TYPE extends StoreService<any> = StoreService<any>>(React: IReact, service: SERVICE_TYPE): (component: FunctionComponent<any>) => {
     new (props: any): {
         state: {
-            digest: number;
             isMounted: boolean;
         };
+        componentDidMount(): void;
+        componentWillUnmount(): void;
+        updateState(): void;
+        render(): any;
+        props: any;
+        setState(state: any): void;
+    };
+};
+export declare function multiServiceConnector<PROP_TYPE, SERVICE_TYPE extends StoreService<any> = StoreService<any>, SERVICE_MAP extends Record<string, SERVICE_TYPE> = Record<string, SERVICE_TYPE>>(React: IReact, services: SERVICE_MAP): (component: FunctionComponent<PROP_TYPE>) => {
+    new (props: any): {
+        state: {
+            isMounted: boolean;
+        };
+        unsubscribe: () => void;
         componentDidMount(): void;
         componentWillUnmount(): void;
         updateState(): void;
